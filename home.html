@@ -1,17 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <title>Go Jobs</title>
-  </head>
-  <body>
-    <h1>Go Jobs</h1>
-    <h3>Indeed.com scrapper</h3>
-    <form method="POST" action="/scrape">
-      <input placeholder="what job do u want" name="term" />
-      <button>Search</button>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <title>Job Scrapper</title>
+</head>
+
+<body>
+
+  <div class="container my-5">
+    <h1>Find Your Jobs</h1>
+    <strong>Indeed.com scrapper</strong>
+    <div>made by <a href="https://github.com/oohyun15">@oohyun15</a></div>
+    <br>
+    <form class="form-inline" method="POST" action="/scrape">
+      <div class="form-group">
+        <label for="name" class="mr-1">Keyword</label>
+        <input class="form-control mx-2" placeholder="ex) python" name="term" />
+        <button class="btn btn-primary">Search</button>
+      </div>
     </form>
-  </body>
+  </div>
+
+
+</body>
+
 </html>
