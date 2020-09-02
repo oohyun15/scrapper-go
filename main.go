@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 
 	"github.com/oohyun15/scrapper-go/scrapper"
@@ -15,8 +16,10 @@ func handleHome(c echo.Context) error {
 }
 
 func handleScrape(c echo.Context) error {
+	defer os.Remove(fileName)
 	term := strings.ToLower(scrapper.CleanString(c.FormValue("term")))
-	return nil
+	scrapper.Scrape(term)
+	return c.Attachment(fileName, term+"_"+fileName)
 }
 
 func main() {
