@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -39,15 +40,20 @@ type tableData struct {
 
 // Scrape indeeds term
 func Scrape(term string) {
+	startTime := time.Now()
+	fmt.Println("start:", startTime)
 	var jobs []extractedJob
 	var baseURL string = "http://dml.komacon.kr/archive/"
-	batchSize := 1000
 	c := make(chan extractedJob)
 	count, _ := strconv.Atoi(term)
+	batchSize := 500
 
-	for idx := 0; idx < count/batchSize+1; idx++ {
-		start := idx*batchSize + 1
-		end := (idx + 1) * batchSize
+	for idx := 1; idx < (count-150000)/batchSize+1; idx++ {
+		start := idx*batchSize + 150000
+		end := (idx+1)*batchSize + 150000
+		if end > count {
+			end = count
+		}
 		fmt.Println("start:", start, "end:", end)
 		for i := start; i < end; i++ {
 			go getPage(i, baseURL, c)
@@ -60,6 +66,8 @@ func Scrape(term string) {
 	}
 	writeJobs(jobs)
 	fmt.Println("Done, extracted", len(jobs))
+	endTime := time.Now()
+	fmt.Println("end: ", endTime)
 }
 
 func getPage(id int, url string, mainC chan<- extractedJob) {
@@ -74,7 +82,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 
 	defer res.Body.Close()
 
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	doc, _ := goquery.NewDocumentFromReader(res.Body)
 	checkErr(err)
 	titleList := strings.Split(doc.Find(".arcive-base-data").Text(), "\n")
 	if len(titleList) == 1 {
@@ -123,7 +131,7 @@ func getPages(url string) int {
 
 	defer res.Body.Close()
 
-	doc, err := goquery.NewDocumentFromReader(res.Body)
+	doc, _ := goquery.NewDocumentFromReader(res.Body)
 	checkErr(err)
 
 	doc.Find(".pagination").Each(func(i int, s *goquery.Selection) {
@@ -173,12 +181,18 @@ func writeJob(job extractedJob, w *csv.Writer, writeC chan<- error) {
 }
 
 func checkErr(err error) {
-	if err != nil {
-		log.Fatalln(err)
+	if err := recover(); err != nil {
+		fmt.Println(err)
 	}
 }
 
 func checkCode(res *http.Response) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println("panic occurred:", err)
+		}
+	}()
+
 	if res.StatusCode != 200 {
 		log.Fatalln("Request failed with Status:", res.StatusCode)
 	}

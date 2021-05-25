@@ -19,7 +19,7 @@ func handleScrape(c echo.Context) error {
 	defer os.Remove(fileName)
 	term := strings.ToLower(scrapper.CleanString(c.FormValue("term")))
 	scrapper.Scrape(term)
-	return c.Attachment(fileName, term+"_"+fileName)
+	return c.Attachment(fileName, fileName)
 }
 
 func main() {
