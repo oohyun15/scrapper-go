@@ -9,7 +9,7 @@ import (
 	"github.com/labstack/echo"
 )
 
-const fileName string = "jobs.csv"
+const fileName string = "webtoon.csv"
 
 func handleHome(c echo.Context) error {
 	return c.File("home.html")
