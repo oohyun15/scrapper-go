@@ -25,6 +25,7 @@ type extractedJob struct {
 	size             string
 	isbn             string
 	published_at     string
+	image            string
 
 	// "id", "type", "author", "publisher", "origin_publisher", "price", "size", "isbn", "published_at"
 	// title    string
@@ -42,15 +43,18 @@ type tableData struct {
 func Scrape(term string) {
 	startTime := time.Now()
 	fmt.Println("start:", startTime)
+	w := initFile()
 	var jobs []extractedJob
 	var baseURL string = "http://dml.komacon.kr/archive/"
 	c := make(chan extractedJob)
 	count, _ := strconv.Atoi(term)
-	batchSize := 500
+	batchSize := 100
 
-	for idx := 1; idx < (count-150000)/batchSize+1; idx++ {
-		start := idx*batchSize + 150000
-		end := (idx+1)*batchSize + 150000
+	pivot := 300000
+	for idx := 0; idx < (count-pivot)/batchSize+1; idx++ {
+		jobs = nil
+		start := idx*batchSize + pivot
+		end := (idx+1)*batchSize + pivot
 		if end > count {
 			end = count
 		}
@@ -60,12 +64,11 @@ func Scrape(term string) {
 		}
 		for i := start; i < end; i++ {
 			extractedJobs := <-c
-			// fmt.Println(extractedJobs)
 			jobs = append(jobs, extractedJobs)
 		}
+		writeJobs(jobs, w)
 	}
-	writeJobs(jobs)
-	fmt.Println("Done, extracted", len(jobs))
+	fmt.Println("Done, extracted")
 	endTime := time.Now()
 	fmt.Println("end: ", endTime)
 }
@@ -75,23 +78,38 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	job.id = id
 	c := make(chan tableData)
 	pageURL := url + strconv.Itoa(id)
-	// fmt.Println("Requesting", pageURL)
-	res, err := http.Get(pageURL)
-	checkErr(err)
-	checkCode(res)
+	var res *http.Response
+	var err error
+	res, err = http.Get(pageURL)
+	if res == nil {
+		res, err = http.Get(pageURL)
+	}
 
+	checkErr(err)
+	checkCode(res, pageURL)
+	if res == nil {
+		mainC <- job
+		return
+	}
 	defer res.Body.Close()
 
-	doc, _ := goquery.NewDocumentFromReader(res.Body)
+	doc, err := goquery.NewDocumentFromReader(res.Body)
 	checkErr(err)
 	titleList := strings.Split(doc.Find(".arcive-base-data").Text(), "\n")
 	if len(titleList) == 1 {
 		mainC <- job
+		fmt.Println("Not found", pageURL)
 		return
 	}
 	title := findTitle(titleList, id)
 	job.title = CleanString(title)
-	job.description = strings.TrimSpace(doc.Find(".content").Text())
+	// job.description = strings.TrimSpace(doc.Find(".content").Text())
+	image, _ := doc.Find(".arcive-img").Attr("style")
+	image = strings.Split(image, ",")[0]
+	image = strings.Split(image, "background-image: url('")[1]
+	image = strings.Split(image, "')")[0]
+	job.image = image
+
 	dataTable := doc.Find(".arcive-data-table tr")
 	dataTable.Each(func(i int, card *goquery.Selection) {
 		go extractJob(card, c)
@@ -127,11 +145,11 @@ func getPages(url string) int {
 	pages := 0
 	res, err := http.Get(url)
 	checkErr(err)
-	checkCode(res)
+	checkCode(res, url)
 
 	defer res.Body.Close()
 
-	doc, _ := goquery.NewDocumentFromReader(res.Body)
+	doc, err := goquery.NewDocumentFromReader(res.Body)
 	checkErr(err)
 
 	doc.Find(".pagination").Each(func(i int, s *goquery.Selection) {
@@ -141,23 +159,25 @@ func getPages(url string) int {
 	return pages
 }
 
-func writeJobs(jobs []extractedJob) {
+func initFile() *csv.Writer {
 	file, err := os.Create("webtoon.csv")
 	checkErr(err)
 
 	w := csv.NewWriter(file)
 	defer w.Flush()
 
-	headers := []string{"id", "title", "type", "author", "publisher", "origin_publisher", "description", "price", "size", "isbn", "published_at"}
+	headers := []string{"id", "title", "type", "author", "publisher", "origin_publisher", "price", "size", "isbn", "published_at", "image"}
 
 	wErr := w.Write(headers)
 	checkErr(wErr)
 
-	c := make(chan error)
+	return w
+}
 
+func writeJobs(jobs []extractedJob, w *csv.Writer) {
+	c := make(chan error)
 	for _, job := range jobs {
 		go writeJob(job, w, c)
-
 		checkErr(<-c)
 	}
 }
@@ -170,11 +190,12 @@ func writeJob(job extractedJob, w *csv.Writer, writeC chan<- error) {
 		job.author,
 		job.publisher,
 		job.origin_publisher,
-		job.description,
+		// job.description,
 		job.price,
 		job.size,
 		job.isbn,
 		job.published_at,
+		job.image,
 	}
 	jwErr := w.Write(jobSlice)
 	writeC <- jwErr
@@ -182,17 +203,16 @@ func writeJob(job extractedJob, w *csv.Writer, writeC chan<- error) {
 
 func checkErr(err error) {
 	if err := recover(); err != nil {
-		fmt.Println(err)
+		panic(err)
 	}
 }
 
-func checkCode(res *http.Response) {
+func checkCode(res *http.Response, url string) {
 	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println("panic occurred:", err)
+		if c := recover(); c != nil {
+			fmt.Println("recover", url)
 		}
 	}()
-
 	if res.StatusCode != 200 {
 		log.Fatalln("Request failed with Status:", res.StatusCode)
 	}
