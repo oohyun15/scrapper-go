@@ -37,7 +37,7 @@ type tableData struct {
 	name  string
 }
 
-var Num int = 0
+var Num int
 
 func Rescrape() {
 	ids := readIds()
@@ -78,6 +78,7 @@ func Scrape(start int, end int, batchSize int) {
 	startTime := time.Now()
 	fmt.Println("start:", startTime)
 	w := initFile()
+	Num = 0
 
 	var jobs []extractedJob
 	var baseURL string = "http://dml.komacon.kr/archive/"
@@ -130,7 +131,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	titleList := strings.Split(doc.Find(".arcive-base-data").Text(), "\n")
 	if len(titleList) == 1 {
 		mainC <- job
-		// fmt.Println("Not found", pageURL)
+		fmt.Println("Not found", pageURL)
 		return
 	}
 	title := findTitle(titleList, id)
@@ -156,7 +157,6 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	}
 	link, _ := doc.Find("a.btn").Attr("href")
 	job.link = link
-	Num += 1
 	mainC <- job
 }
 
@@ -269,6 +269,9 @@ func webtoonTitle(data tableData, job *extractedJob) {
 	switch data.title {
 	case "형태":
 		job._type = data.name
+		if job._type == "웹툰" {
+			Num += 1
+		}
 	case "작가":
 		job.author = data.name
 	case "연재매체":
