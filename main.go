@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	"strings"
+	"strconv"
 
 	"github.com/oohyun15/scrapper-go/scrapper"
 
@@ -17,11 +17,12 @@ func handleHome(c echo.Context) error {
 
 func handleScrape(c echo.Context) error {
 	defer os.Remove(fileName)
-	term := strings.ToLower(scrapper.CleanString(c.FormValue("term")))
-	pivot := strings.ToLower(scrapper.CleanString(c.FormValue("pivot")))
-	scrapper.Scrape(term, pivot)
+	start, _ := strconv.Atoi(scrapper.CleanString(c.FormValue("start")))
+	end, _ := strconv.Atoi(scrapper.CleanString(c.FormValue("end")))
+	batchSize, _ := strconv.Atoi(scrapper.CleanString(c.FormValue("batch")))
+	scrapper.Scrape(start, end, batchSize)
 	// return nil
-	return c.Attachment(fileName, pivot+"_"+term+"_"+fileName)
+	return c.Attachment(fileName, fileName+"("+scrapper.CleanString(c.FormValue("start"))+"-"+scrapper.CleanString(c.FormValue("end"))+")")
 }
 
 func Rescrape(c echo.Context) error {

@@ -78,7 +78,7 @@ func Rescrape() {
 }
 
 // Scrape indeeds term
-func Scrape(term string, _pivot string) {
+func Scrape(start int, end int, batchSize int) {
 	startTime := time.Now()
 	fmt.Println("start:", startTime)
 	w := initFile()
@@ -86,21 +86,17 @@ func Scrape(term string, _pivot string) {
 	var baseURL string = "http://dml.komacon.kr/archive/"
 	c := make(chan extractedJob)
 
-	count, _ := strconv.Atoi(term)
-	batchSize := 1000
-	pivot, _ := strconv.Atoi(_pivot)
-
-	for idx := 0; idx < (count-pivot)/batchSize+1; idx++ {
-		start := idx*batchSize + pivot
-		end := (idx+1)*batchSize + pivot
-		if end > count {
-			end = count
+	for idx := 0; idx < (end-start)/batchSize+1; idx++ {
+		_start := idx*batchSize + start
+		_end := (idx+1)*batchSize + start
+		if _end > end {
+			_end = end
 		}
-		fmt.Println("start:", start, "end:", end, "current:", len(jobs))
-		for i := start; i < end; i++ {
+		fmt.Println("start:", _start, "end:", _end, "current:", len(jobs))
+		for i := _start; i < _end; i++ {
 			go getPage(i, baseURL, c)
 		}
-		for i := start; i < end; i++ {
+		for i := _start; i < _end; i++ {
 			extractedJobs := <-c
 			jobs = append(jobs, extractedJobs)
 		}
@@ -119,7 +115,6 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	// fmt.Println("pageURL:", pageURL)
 	var res *http.Response
 	var err error
-	res, err = http.Get(pageURL)
 	if res == nil {
 		res, err = http.Get(pageURL)
 	}
@@ -127,6 +122,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	checkErr(err)
 	checkCode(res, pageURL)
 	if res == nil {
+		fmt.Println("Response is nil", pageURL)
 		mainC <- job
 		return
 	}
@@ -163,6 +159,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	}
 	link, _ := doc.Find("a.btn").Attr("href")
 	job.link = link
+	num += 1
 	mainC <- job
 }
 
