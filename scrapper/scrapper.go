@@ -3,6 +3,7 @@ package scrapper
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ type extractedJob struct {
 	_type            string
 	title            string
 	author           string
+	author_id        string
 	publisher        string
 	origin_publisher string
 	description      string
@@ -26,6 +28,8 @@ type extractedJob struct {
 	isbn             string
 	published_at     string
 	image            string
+	date             string
+	link             string
 
 	// "id", "type", "author", "publisher", "origin_publisher", "price", "size", "isbn", "published_at"
 	// title    string
@@ -39,26 +43,60 @@ type tableData struct {
 	name  string
 }
 
-// Scrape indeeds term
-func Scrape(term string) {
+func Rescrape() {
+	ids := readIds()
+	fmt.Println("count:", len(ids))
 	startTime := time.Now()
 	fmt.Println("start:", startTime)
 	w := initFile()
 	var jobs []extractedJob
 	var baseURL string = "http://dml.komacon.kr/archive/"
 	c := make(chan extractedJob)
-	count, _ := strconv.Atoi(term)
+	count := len(ids)
 	batchSize := 100
 
-	pivot := 300000
+	for idx := 0; idx < count/batchSize+1; idx++ {
+		start := idx * batchSize
+		end := (idx + 1) * batchSize
+		if end > count {
+			end = count
+		}
+		fmt.Println("start:", start, "end:", end)
+		for i := start; i < end; i++ {
+			num, _ := strconv.Atoi(ids[i])
+			go getPage(num, baseURL, c)
+		}
+		for i := start; i < end; i++ {
+			extractedJobs := <-c
+			jobs = append(jobs, extractedJobs)
+		}
+	}
+	writeJobs(jobs, w)
+	fmt.Println("Done, extracted")
+	endTime := time.Now()
+	fmt.Println("end: ", endTime)
+}
+
+// Scrape indeeds term
+func Scrape(term string, _pivot string) {
+	startTime := time.Now()
+	fmt.Println("start:", startTime)
+	w := initFile()
+	var jobs []extractedJob
+	var baseURL string = "http://dml.komacon.kr/archive/"
+	c := make(chan extractedJob)
+
+	count, _ := strconv.Atoi(term)
+	batchSize := 1000
+	pivot, _ := strconv.Atoi(_pivot)
+
 	for idx := 0; idx < (count-pivot)/batchSize+1; idx++ {
-		jobs = nil
 		start := idx*batchSize + pivot
 		end := (idx+1)*batchSize + pivot
 		if end > count {
 			end = count
 		}
-		fmt.Println("start:", start, "end:", end)
+		fmt.Println("start:", start, "end:", end, "current:", len(jobs))
 		for i := start; i < end; i++ {
 			go getPage(i, baseURL, c)
 		}
@@ -66,8 +104,8 @@ func Scrape(term string) {
 			extractedJobs := <-c
 			jobs = append(jobs, extractedJobs)
 		}
-		writeJobs(jobs, w)
 	}
+	writeJobs(jobs, w)
 	fmt.Println("Done, extracted")
 	endTime := time.Now()
 	fmt.Println("end: ", endTime)
@@ -78,6 +116,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	job.id = id
 	c := make(chan tableData)
 	pageURL := url + strconv.Itoa(id)
+	// fmt.Println("pageURL:", pageURL)
 	var res *http.Response
 	var err error
 	res, err = http.Get(pageURL)
@@ -109,6 +148,10 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	image = strings.Split(image, "background-image: url('")[1]
 	image = strings.Split(image, "')")[0]
 	job.image = image
+	author_id, _ := doc.Find("td a").Attr("href")
+	if author_id != "" && strings.Contains(author_id, "author") {
+		job.author_id = strings.Split(author_id, "/author/")[1]
+	}
 
 	dataTable := doc.Find(".arcive-data-table tr")
 	dataTable.Each(func(i int, card *goquery.Selection) {
@@ -116,20 +159,16 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	})
 	for i := 0; i < dataTable.Length(); i++ {
 		data := <-c
-		convertTitle(data, &job)
+		webtoonTitle(data, &job)
 	}
+	link, _ := doc.Find("a.btn").Attr("href")
+	job.link = link
 	mainC <- job
 }
 
 func extractJob(card *goquery.Selection, c chan<- tableData) {
 	title := CleanString(card.Find("td.td-header").Text())
 	name := CleanString(card.Find("td").Last().Text())
-
-	// id, _ := card.Attr("data-jk")
-	// title := CleanString(card.Find(".title>a").Text())
-	// location := CleanString(card.Find(".sjcl").Text())
-	// salary := CleanString(card.Find(".salaryText").Text())
-	// summary := CleanString(card.Find(".summary").Text())
 	c <- tableData{
 		title: title,
 		name:  name,
@@ -141,24 +180,6 @@ func CleanString(str string) string {
 	return strings.Join(strings.Fields(strings.TrimSpace(str)), " ")
 }
 
-func getPages(url string) int {
-	pages := 0
-	res, err := http.Get(url)
-	checkErr(err)
-	checkCode(res, url)
-
-	defer res.Body.Close()
-
-	doc, err := goquery.NewDocumentFromReader(res.Body)
-	checkErr(err)
-
-	doc.Find(".pagination").Each(func(i int, s *goquery.Selection) {
-		pages = s.Find("a").Length()
-	})
-
-	return pages
-}
-
 func initFile() *csv.Writer {
 	file, err := os.Create("webtoon.csv")
 	checkErr(err)
@@ -166,7 +187,7 @@ func initFile() *csv.Writer {
 	w := csv.NewWriter(file)
 	defer w.Flush()
 
-	headers := []string{"id", "title", "type", "author", "publisher", "origin_publisher", "price", "size", "isbn", "published_at", "image"}
+	headers := []string{"id", "title", "type", "author", "author_id", "publisher", "image", "date", "link"}
 
 	wErr := w.Write(headers)
 	checkErr(wErr)
@@ -177,8 +198,10 @@ func initFile() *csv.Writer {
 func writeJobs(jobs []extractedJob, w *csv.Writer) {
 	c := make(chan error)
 	for _, job := range jobs {
-		go writeJob(job, w, c)
-		checkErr(<-c)
+		if job._type == "웹툰" {
+			go writeJob(job, w, c)
+			checkErr(<-c)
+		}
 	}
 }
 
@@ -188,14 +211,12 @@ func writeJob(job extractedJob, w *csv.Writer, writeC chan<- error) {
 		job.title,
 		job._type,
 		job.author,
+		job.author_id,
 		job.publisher,
-		job.origin_publisher,
 		// job.description,
-		job.price,
-		job.size,
-		job.isbn,
-		job.published_at,
 		job.image,
+		job.date,
+		job.link,
 	}
 	jwErr := w.Write(jobSlice)
 	writeC <- jwErr
@@ -248,4 +269,54 @@ func convertTitle(data tableData, job *extractedJob) {
 	case "출판일":
 		job.published_at = data.name
 	}
+}
+
+func webtoonTitle(data tableData, job *extractedJob) {
+	switch data.title {
+	case "형태":
+		job._type = data.name
+	case "작가":
+		job.author = data.name
+	case "연재매체":
+		job.publisher = data.name
+	case "출판사":
+		job.publisher = data.name
+	case "연재기간":
+		job.date = data.name
+	}
+}
+
+func readIds() []string {
+	var ids []string
+	fmt.Println("readIds")
+	file, err := os.Open("webtoons.csv")
+	if err != nil {
+		log.Fatalln("Couldn't open the csv file", err)
+	}
+	r := csv.NewReader(file)
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Println(err)
+		}
+		ids = append(ids, record[0])
+	}
+
+	keys := make(map[string]bool)
+	ue := []string{}
+
+	for _, value := range ids {
+		if _, saveValue := keys[value]; !saveValue {
+
+			keys[value] = true
+			ue = append(ue, value)
+		} else {
+			fmt.Println(value)
+		}
+
+	}
+	return ue
 }

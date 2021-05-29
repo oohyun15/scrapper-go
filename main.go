@@ -18,13 +18,23 @@ func handleHome(c echo.Context) error {
 func handleScrape(c echo.Context) error {
 	defer os.Remove(fileName)
 	term := strings.ToLower(scrapper.CleanString(c.FormValue("term")))
-	scrapper.Scrape(term)
-	return c.Attachment(fileName, term+"_"+fileName)
+	pivot := strings.ToLower(scrapper.CleanString(c.FormValue("pivot")))
+	scrapper.Scrape(term, pivot)
+	// return nil
+	return c.Attachment(fileName, pivot+"_"+term+"_"+fileName)
+}
+
+func Rescrape(c echo.Context) error {
+	defer os.Remove(fileName)
+	scrapper.Rescrape()
+	// return nil
+	return c.Attachment(fileName, "rescrape_"+fileName)
 }
 
 func main() {
 	e := echo.New()
 	e.GET("/", handleHome)
 	e.POST("/scrape", handleScrape)
+	e.POST("/rescrape", Rescrape)
 	e.Logger.Fatal(e.Start(":3000"))
 }
