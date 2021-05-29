@@ -21,8 +21,7 @@ func handleScrape(c echo.Context) error {
 	end, _ := strconv.Atoi(scrapper.CleanString(c.FormValue("end")))
 	batchSize, _ := strconv.Atoi(scrapper.CleanString(c.FormValue("batch")))
 	scrapper.Scrape(start, end, batchSize)
-	// return nil
-	return c.Attachment(fileName, fileName+"("+scrapper.CleanString(c.FormValue("start"))+"-"+scrapper.CleanString(c.FormValue("end"))+")")
+	return c.Attachment(fileName, "webtoon("+scrapper.CleanString(c.FormValue("start"))+"-"+scrapper.CleanString(c.FormValue("end"))+").csv")
 }
 
 func Rescrape(c echo.Context) error {

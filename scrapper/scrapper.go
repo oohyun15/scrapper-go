@@ -30,18 +30,14 @@ type extractedJob struct {
 	image            string
 	date             string
 	link             string
-
-	// "id", "type", "author", "publisher", "origin_publisher", "price", "size", "isbn", "published_at"
-	// title    string
-	// location string
-	// salary   string
-	// summary  string
 }
 
 type tableData struct {
 	title string
 	name  string
 }
+
+var Num int = 0
 
 func Rescrape() {
 	ids := readIds()
@@ -82,6 +78,7 @@ func Scrape(start int, end int, batchSize int) {
 	startTime := time.Now()
 	fmt.Println("start:", startTime)
 	w := initFile()
+
 	var jobs []extractedJob
 	var baseURL string = "http://dml.komacon.kr/archive/"
 	c := make(chan extractedJob)
@@ -92,7 +89,7 @@ func Scrape(start int, end int, batchSize int) {
 		if _end > end {
 			_end = end
 		}
-		fmt.Println("start:", _start, "end:", _end, "current:", len(jobs))
+		fmt.Println("start:", _start, "end:", _end, "current:", Num)
 		for i := _start; i < _end; i++ {
 			go getPage(i, baseURL, c)
 		}
@@ -133,7 +130,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	titleList := strings.Split(doc.Find(".arcive-base-data").Text(), "\n")
 	if len(titleList) == 1 {
 		mainC <- job
-		fmt.Println("Not found", pageURL)
+		// fmt.Println("Not found", pageURL)
 		return
 	}
 	title := findTitle(titleList, id)
@@ -159,7 +156,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	}
 	link, _ := doc.Find("a.btn").Attr("href")
 	job.link = link
-	num += 1
+	Num += 1
 	mainC <- job
 }
 

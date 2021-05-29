@@ -12,15 +12,25 @@
 <body>
 
   <div class="container my-5">
-    <h1>Find Your Jobs</h1>
-    <strong>Indeed.com scrapper</strong>
+    <h1>Crawl Webtoon Information</h1>
+    <strong>dml.komacon.kr scrapper</strong>
     <div>made by <a href="https://github.com/oohyun15">@oohyun15</a></div>
     <br>
     <form class="form-inline" method="POST" action="/scrape">
       <div class="form-group">
-        <label for="name" class="mr-1">Keyword</label>
-        <input class="form-control mx-2" placeholder="ex) python" name="term" />
+        <label for="name" class="mr-1">Batch Size</label>
+        <input class="form-control mx-2" placeholder="ex) 1000" name="batch" />
+        <label for="name" class="mr-1">Scope</label>
+        <input class="form-control mx-2" placeholder="ex) start" name="start" />
+        <input class="form-control mx-2" placeholder="ex) end" name="end" />
         <button class="btn btn-primary">Search</button>
+      </div>
+    </form>
+    <br>
+    <form class="form-inline" method="POST" action="/rescrape">
+      <div class="form-group">
+        <label for="name" class="mr-1">Refine</label>
+        <button class="btn btn-success">rescrape</button>
       </div>
     </form>
   </div>
