@@ -67,6 +67,7 @@ func Rescrape() {
 			jobs = append(jobs, extractedJobs)
 		}
 	}
+
 	writeJobs(jobs, w)
 	fmt.Println("Done, extracted")
 	endTime := time.Now()
@@ -90,7 +91,7 @@ func Scrape(start int, end int, batchSize int) {
 		if _end > end {
 			_end = end
 		}
-		fmt.Println("start:", _start, "end:", _end, "current:", Num)
+		fmt.Println("start:", _start, "end:", _end-1, "current:", Num)
 		for i := _start; i < _end; i++ {
 			go getPage(i, baseURL, c)
 		}
@@ -100,7 +101,7 @@ func Scrape(start int, end int, batchSize int) {
 		}
 	}
 	writeJobs(jobs, w)
-	fmt.Println("Done, extracted")
+	fmt.Println("Done, extracted", Num)
 	endTime := time.Now()
 	fmt.Println("end: ", endTime)
 }
@@ -108,7 +109,6 @@ func Scrape(start int, end int, batchSize int) {
 func getPage(id int, url string, mainC chan<- extractedJob) {
 	var job extractedJob
 	job.id = id
-	c := make(chan tableData)
 	pageURL := url + strconv.Itoa(id)
 	// fmt.Println("pageURL:", pageURL)
 	var res *http.Response
@@ -131,7 +131,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	titleList := strings.Split(doc.Find(".arcive-base-data").Text(), "\n")
 	if len(titleList) == 1 {
 		mainC <- job
-		fmt.Println("Not found", pageURL)
+		// fmt.Println("Not found", pageURL)
 		return
 	}
 	title := findTitle(titleList, id)
@@ -142,6 +142,7 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 	image = strings.Split(image, "background-image: url('")[1]
 	image = strings.Split(image, "')")[0]
 	job.image = image
+
 	author_id, _ := doc.Find("td a").Attr("href")
 	if author_id != "" && strings.Contains(author_id, "author") {
 		job.author_id = strings.Split(author_id, "/author/")[1]
@@ -149,12 +150,15 @@ func getPage(id int, url string, mainC chan<- extractedJob) {
 
 	dataTable := doc.Find(".arcive-data-table tr")
 	dataTable.Each(func(i int, card *goquery.Selection) {
-		go extractJob(card, c)
-	})
-	for i := 0; i < dataTable.Length(); i++ {
-		data := <-c
+		title := CleanString(card.Find("td.td-header").Text())
+		name := CleanString(card.Find("td").Last().Text())
+		data := tableData{
+			title: title,
+			name:  name,
+		}
 		webtoonTitle(data, &job)
-	}
+	})
+
 	link, _ := doc.Find("a.btn").Attr("href")
 	job.link = link
 	mainC <- job
@@ -190,6 +194,7 @@ func initFile() *csv.Writer {
 }
 
 func writeJobs(jobs []extractedJob, w *csv.Writer) {
+	defer w.Flush()
 	c := make(chan error)
 	for _, job := range jobs {
 		if job._type == "웹툰" {
@@ -285,7 +290,6 @@ func webtoonTitle(data tableData, job *extractedJob) {
 
 func readIds() []string {
 	var ids []string
-	fmt.Println("readIds")
 	file, err := os.Open("webtoons.csv")
 	if err != nil {
 		log.Fatalln("Couldn't open the csv file", err)
@@ -302,6 +306,8 @@ func readIds() []string {
 		ids = append(ids, record[0])
 	}
 
+	fmt.Println("ids.count", len(ids))
+
 	keys := make(map[string]bool)
 	ue := []string{}
 
@@ -313,7 +319,7 @@ func readIds() []string {
 		} else {
 			fmt.Println(value)
 		}
-
 	}
+	fmt.Println("ue.count", len(ue))
 	return ue
 }
